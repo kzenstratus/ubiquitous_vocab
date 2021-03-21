@@ -27,7 +27,23 @@ class SynWords():
         # Use WordNet to map a word to it's synonym set.
         self.synset_map = { word : wn.synsets(word) for word in words}
 
-        self.word_df = {} # maps word to synonym, def, pos
+        self.word_df = pd.DataFrame() # maps word to synonym, def, pos
+        self.syn_to_word = defaultdict(list) # maps a synonym to word.
+
+    def get_syn_to_word(self) -> Dict[str, List[str]]:
+        # Requires get_synonyms to have been run.
+        # Creates a mapping between synonym to a word.
+        # This could be done in the synset for loop in get_synonyms
+        # But putting it out here for simplicity.
+        if self.word_df.shape[0] == 0:
+            self.get_synonyms()
+
+        for i in range(self.word_df.shape[0]):
+            syn = self.word_df.iloc[i]["syn"]
+            word = self.word_df.iloc[i]["word"]
+            self.syn_to_word[syn].append(word)
+
+        return self.syn_to_word
 
     def get_synonyms(self):
         # synset_map : Dict[str, List[nltk.corpus.reader.wordnet.Synset]]
@@ -39,11 +55,13 @@ class SynWords():
             syn_list = []
             for synset in synsets:
                 syn_list += [x for x in synset.lemma_names() if x != original]
-            
+
             word_df = word_df.append(pd.DataFrame({"word" : original,
                                     "syn" : syn_list},
                                     index = [x for x in range(len(syn_list))]
                                         ))
+
+
         # Remove any duplicates
         word_df.drop_duplicates(inplace = True)
         word_df = word_df.query("word != syn")

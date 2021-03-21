@@ -48,6 +48,7 @@ def get_clean_news(news_file : str = None) -> pd.DataFrame:
     cols_to_drop = [col for col in list(news_df) if bool(re.search("Unnamed", col))]
     
     news_df.drop(columns = cols_to_drop, inplace = True)
+    news_df = news_df.query("article.notnull()")
     news_df.to_csv(news_file, index = False)
     return news_df
 def get_news(news_file : str = None) -> pd.DataFrame:
