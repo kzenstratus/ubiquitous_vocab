@@ -2,6 +2,8 @@
 import os, re
 import pandas as pd
 
+from logger_utils import make_logger
+
 def parse_raw_vocab_line(s : str) -> pd.DataFrame:
     # Split out the word and pos. 
     # the definitions and examples are too noisy to cleanly parse.
