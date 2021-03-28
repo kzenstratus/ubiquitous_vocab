@@ -18,11 +18,11 @@ class ReplacedContext(BaseModel):
     mod_text: Optional[List[str]] # text modified with syn to be replaced by vocab.
     similarity_score : Optional[List[float]]
 
-    @validator('orig_text', "mod_text")
-    def list_to_str(cls, v):
-        if isinstance(v, list):
-            v = ". ".join(v)
-        return v
+    # @validator('orig_text', "mod_text")
+    # def list_to_str(cls, v):
+    #     if isinstance(v, list):
+    #         v = ". ".join(v)
+    #     return v
     
 class Article(BaseModel):
     original: str 
