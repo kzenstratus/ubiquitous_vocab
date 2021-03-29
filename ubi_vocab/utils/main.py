@@ -262,35 +262,21 @@ def get_replace_example(news_df : pd.DataFrame,
     news_df["original"] = news_df["article"]
     
     # 
+    bart = ST(model_name="facebook/bart-large-cnn")
     orig_highlights : pd.DataFrame = _get_sents_containing_word(
                                                 all_text = tmp["article"].array[0],
                                                 word_syn_df = word_syn_df,
-                                                num_sentences = 1)
-    # pd.set_option('display.max_colwidth', None)
-    all_scores = [x.similarity_score for x in orig_highlights]
-    # see how well scores perform here.
-    assess_df = pd.DataFrame(dict(vocab = [x.vocab for x in orig_highlights],
-                                  syn = [x.syn for x in orig_highlights],
-                                  orig_text = [x.orig_text for x in orig_highlights],
-                                  mod_text = [x.mod_text for x in orig_highlights],
-                                  score = all_scores))
+                                                num_sentences = 1,
+                                                st = bart
+                                                )
 
-    px.histogram(all_scores)
-    # tmp["orig_highlights"] = orig_highlights
+    # pd.set_option('display.max_colwidth', None)
+    # see how well scores perform here.
+    bart_rv = px.histogram(orig_highlights["sim_score"])
 
     # \\b is necessary to match full words.    
-    tmp["new_article"] = tmp.article.replace({f"\\b{k}\\b": v for k,v in syn_to_word_regex.items},
-                                             regex = True)
-
-    # mod_highlights = _get_sents_containing_word(tmp["new_article"].array[0],
-    #                             word_map = word_to_syn_regex)
-
-
-    # news_df.sample(1, random_state = seed)\
-    #         .article\
-    #         .replace(syn_to_word, regex = True, inplace = True)
-
-    # Highlight the replaced sentence.
+    # tmp["new_article"] = tmp.article.replace({f"\\b{k}\\b": v for k,v in syn_to_word_regex.items},
+    #                                          regex = True)
 
 
 def main():
@@ -351,3 +337,4 @@ def main():
     word_syn_df = small_syn
     # small_syn_to_word = {syn : word for syn, word in syn_to_word.items() if syn in narrower_syn}
 
+    # Step through get_replace_example()
