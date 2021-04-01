@@ -253,6 +253,7 @@ def _get_sents_containing_word(all_text : str,
     # return all_replaced_context
     return article_df
 
+
 def get_replace_example(news_df : pd.DataFrame,
                         word_syn_df : pd.DataFrame):
 
@@ -338,4 +339,3 @@ def main():
     # small_syn_to_word = {syn : word for syn, word in syn_to_word.items() if syn in narrower_syn}
 
     # Step through get_replace_example()
-    
