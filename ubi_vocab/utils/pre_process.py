@@ -39,12 +39,12 @@ class SynWords:
         # self.words = words
         # self.pos = pos
         # Use WordNet to map a word to it's synonym set.
-        self.synset_map = {word: wn.synsets(word) for word in words}
-
-        self.word_df = pd.DataFrame()  # maps word to synonym, def, pos
+        self.synset_map = self.get_synset_map(raw_data=raw_data)
+        self.synset_map = self.get_synonyms(synset_map=self.synset_map)
+        # self.word_df = pd.DataFrame()  # maps word to synonym, def, pos
         self.syn_to_word = defaultdict(list)  # maps a synonym to word.
 
-    def get_synset_map(raw_data: pd.DataFrame = None):
+    def get_synset_map(self, raw_data: pd.DataFrame = None):
         if raw_data is None:
             raw_data = self.raw_data
         # Generate a mapping from word to synset.
@@ -63,25 +63,25 @@ class SynWords:
             )
         synset_df = pd.concat(synset_list)
         # Only keep synonyms that have matching parts of speech.
-        synset_df[
+        synset_df = synset_df[
             synset_df.apply(lambda row: row.pos == POS_MAP[row.synset.pos()], axis=1)
         ]
         return synset_df
 
-    def get_syn_to_word(self) -> Dict[str, List[str]]:
-        # Requires get_synonyms to have been run.
-        # Creates a mapping between synonym to a word.
-        # This could be done in the synset for loop in get_synonyms
-        # But putting it out here for simplicity.
-        if self.word_df.shape[0] == 0:
-            self.get_synonyms()
+    # def get_syn_to_word(self) -> Dict[str, List[str]]:
+    #     # Requires get_synonyms to have been run.
+    #     # Creates a mapping between synonym to a word.
+    #     # This could be done in the synset for loop in get_synonyms
+    #     # But putting it out here for simplicity.
+    #     if self.word_df.shape[0] == 0:
+    #         self.get_synonyms()
 
-        for i in range(self.word_df.shape[0]):
-            syn = self.word_df.iloc[i]["syn"]
-            word = self.word_df.iloc[i]["word"]
-            self.syn_to_word[syn].append(word)
+    #     for i in range(self.word_df.shape[0]):
+    #         syn = self.word_df.iloc[i]["syn"]
+    #         word = self.word_df.iloc[i]["word"]
+    #         self.syn_to_word[syn].append(word)
 
-        return self.syn_to_word
+    #     return self.syn_to_word
 
     def get_synonyms(self, synset_map: pd.DataFrame = None):
         if synset_map is None:
