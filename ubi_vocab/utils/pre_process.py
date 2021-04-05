@@ -1,6 +1,6 @@
 # Augment the raw vocab words by adding in synonyms,
 #  maybe concordance lines
-import nltk
+import nltk, re
 
 # nltk.download('wordnet')
 from nltk.corpus import wordnet as wn

@@ -10,6 +10,8 @@ from data_io import get_clean_news, get_raw_vocab
 from transformer import ST, calc_cos_sim
 from logger_utils import make_logger
 
+pd.options.display.width = 0
+
 
 def eda_replacement(news_df: pd.DataFrame, word_syn_df: pd.DataFrame):
     """
@@ -285,6 +287,8 @@ def get_replace_example(news_df: pd.DataFrame, word_syn_df: pd.DataFrame):
     # tmp["new_article"] = tmp.article.replace({f"\\b{k}\\b": v for k,v in syn_to_word_regex.items},
     #                                          regex = True)
 
+    return orig_highlights
+
 
 def main():
     # Read in raw vocab
@@ -329,7 +333,7 @@ def main():
     narrower_syn = set(pop_syn.query("matches < 300").syn.unique())
 
     matched_narr_df, merged_narr_df, small_narr_df, freq_narr_plot = eda_replacement(
-        news_df=news_df, word_syn_df=gre_syn.query("syn.isin(@narrower_syn)")
+        news_df=news_df, word_syn_df=gre_syn
     )
 
     px.histogram(
@@ -348,5 +352,5 @@ def main():
     # small_syn_to_word = {syn : word for syn, word in syn_to_word.items() if syn in narrower_syn}
 
     # Step through get_replace_example()
-    get_replace_example(news_df=news_df, word_syn_df=gre_syn)
+    replaced_sample = get_replace_example(news_df=news_df, word_syn_df=gre_syn)
 
