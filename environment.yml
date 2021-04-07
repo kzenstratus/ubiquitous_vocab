@@ -16,6 +16,8 @@ dependencies:
   - python=3.7
   - pytorch=1.6.0
   - sentence-transformers=0.4.1
+  - spacy=3.0.5
+  - sense2vec=1.0.0a1
   - scipy=1.6.1
   - scikit-learn=0.24.1
   - transformers=4.4.2

@@ -62,10 +62,12 @@ class SynWords:
                 )
             )
         synset_df = pd.concat(synset_list)
+
         # Only keep synonyms that have matching parts of speech.
         synset_df = synset_df[
             synset_df.apply(lambda row: row.pos == POS_MAP[row.synset.pos()], axis=1)
         ]
+
         return synset_df
 
     # def get_syn_to_word(self) -> Dict[str, List[str]]:
@@ -110,7 +112,7 @@ class SynWords:
             lambda x: re.sub("^([a-z]*)\\..*", "\\1", x.name())
         )
         # Extract the syn pos
-        synset_map["syn_pos"] = synset_map["synset"].apply(lambda x: x.pos())
+        synset_map["syn_pos"] = synset_map["synset"].apply(lambda x: POS_MAP[x.pos()])
 
         # Remove any duplicates
         # NOTE: we may not want to remove duplicates if we want to utilize

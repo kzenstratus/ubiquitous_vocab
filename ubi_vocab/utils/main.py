@@ -10,7 +10,39 @@ from data_io import get_clean_news, get_raw_vocab
 from transformer import ST, calc_cos_sim
 from logger_utils import make_logger
 
-pd.options.display.width = 0
+import spacy
+
+# python -m spacy download en_core_web_sm
+import en_core_web_sm
+
+# from sense2vec
+pd.set_option("display.max_colwidth", None)
+
+# from https://github.com/explosion/spaCy/blob/master/spacy/glossary.py
+
+SPACY_POS_MAP = {
+    "ADJ": "adjective",
+    "ADP": "adposition",
+    "ADV": "adverb",
+    "AUX": "auxiliary",
+    "CONJ": "conjunction",
+    "CCONJ": "coordinating conjunction",
+    "DET": "determiner",
+    "INTJ": "interjection",
+    "NOUN": "noun",
+    "PRON": "pronoun",
+    "PROPN": "proper noun",
+    "PUNCT": "punctuation",
+    "SCONJ": "subordinating conjunction",
+    "SYM": "symbol",
+    "VERB": "verb",
+    "JJ": "adjective",
+    "JJR": "adjective",
+    "JJS": "adjective",
+    "ADJA": "adjective",
+    "ADJD": "adjective",
+    "ADVP": "adverb",
+}
 
 
 def eda_replacement(news_df: pd.DataFrame, word_syn_df: pd.DataFrame):
@@ -142,7 +174,7 @@ def _add_replaced_surrounding_sents(
     total_sent: int,
     curr_orig_text: List[str] = [],
     curr_mod_text: List[str] = [],
-) -> None:
+) -> bool:
     """Given a list of sentences, a synonym and word to be replaced,
     and the number of surrounding sentences, add surrounding sentences
     to curr_orig_text and curr_mod_text.
@@ -157,6 +189,9 @@ def _add_replaced_surrounding_sents(
         total_sent (int): Total number of sentences. ie. len(sentences)
         curr_orig_text (List[str]): List of original text surrounding a target word.
         curr_mod_text (List[str]): List of modified text surrounding a target workd.
+    
+    Return:
+        true if word was in found and replaced.
     """
     # Create whole word regex
     regex_syn = f"\\b({syn})\\b"
@@ -178,11 +213,47 @@ def _add_replaced_surrounding_sents(
 
         # Replace highlighted text with new words
         curr_mod_text.append(re.sub(regex_syn, word, orig_text))
+        return True
+    return False
+
+
+def _get_word_in_sent_pos(
+    context: str, tar_word: str, spcy=None, pos_map: Dict[str, str] = SPACY_POS_MAP
+) -> str:
+    """
+    # For a given raw sentence that contains a synonym,
+    # Get the synonym's pos via syntactic parsing.
+
+    # Returns a spacy pos. This is much more extensive than our pos.
+    Args:
+        context (str): [description]
+        tar_word (str): [description]
+        spcy ([type], optional): [description]. Defaults to None.
+
+    Returns:
+        str: [description]
+    Examples:
+    >>> context = "I played in a soccer game"
+    >>> spcy = spacy.load("en_core_web_sm")
+    >>> _get_word_in_sent_pos(context, tar_word = "game", spcy = spcy)    
+
+    """
+    if spcy is None:
+        spcy = spacy.load("en_core_web_sm")
+
+    for token in spcy(context):
+        if token.text.lower() == tar_word.lower():
+            if pos_map is None:
+                return token.pos_
+            else:
+                return SPACY_POS_MAP[token.pos_]
+
+    return None
 
 
 # move to separate file.
 def _get_sents_containing_word(
-    all_text: str, word_syn_df: pd.DataFrame, num_sentences: int = 1, st=None
+    all_text: str, word_syn_df: pd.DataFrame, num_sentences: int = 1, st=None, spcy=None
 ) -> List[ReplacedContext]:
     log = make_logger(__name__)
     if st is None:
@@ -200,17 +271,27 @@ def _get_sents_containing_word(
 
     all_replaced_context = []
 
-    all_orig_text, all_mod_text, all_words, all_syn = [], [], [], []
+    # TODO: this can be much more efficient.
+    (all_orig_text, all_mod_text, all_words, all_syn, all_context_pos, all_syn_pos) = (
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+
     # For each synonym, go through each sentence to see if it can be replaced.
     for tup in word_syn_df.itertuples():
         word: str = tup.word
         syn: str = tup.syn
+        syn_pos: str = tup.syn_pos
 
         # A syn can occur in multiple places within an article.
-        curr_orig_text, curr_mod_text = [], []
+        curr_orig_text, curr_mod_text, curr_pos = [], [], []
         for sent_id, sent in enumerate(sentences):
             # Fill curr_orig_text and curr_mod_text with neighboring sentences.
-            _add_replaced_surrounding_sents(
+            is_replaced = _add_replaced_surrounding_sents(
                 syn=syn,
                 word=word,
                 sentences=sentences,
@@ -221,6 +302,12 @@ def _get_sents_containing_word(
                 curr_mod_text=curr_mod_text,
             )
 
+            # Extract the pos of the target word in the given sentence.
+            if is_replaced:
+                curr_pos.append(
+                    _get_word_in_sent_pos(context=sent, tar_word=syn, spcy=spcy)
+                )
+
         # There was a match, so add a replaced highlight.
         if len(curr_orig_text) > 0:
 
@@ -229,6 +316,8 @@ def _get_sents_containing_word(
             all_mod_text += curr_mod_text
             all_words += [word] * len(curr_orig_text)
             all_syn += [syn] * len(curr_orig_text)
+            all_syn_pos += [syn_pos] * len(curr_orig_text)
+            all_context_pos += curr_pos
 
             # TODO: consider removing.
             # all_replaced_context.append(ReplacedContext(vocab = word,
@@ -242,7 +331,9 @@ def _get_sents_containing_word(
     sim_scores = get_cos_sim(text_a=all_orig_text, text_b=all_mod_text, st=st)
 
     log.info(
-        f"word: {len(all_words)}, syn : {len(all_syn)}, orig_text : {len(all_orig_text)}, mod_text : {len(all_mod_text)}, sim_score : {len(sim_scores)}"
+        f"word: {len(all_words)}, syn : {len(all_syn)}, "
+        f"orig_text : {len(all_orig_text)}, mod_text : {len(all_mod_text)}, "
+        f"sim_score : {len(sim_scores)}"
     )
     # TODO: either store replaced context as a list of replacedcontext obj
     # or just as a dataframe.
@@ -253,6 +344,8 @@ def _get_sents_containing_word(
             orig_text=all_orig_text,
             mod_text=all_mod_text,
             sim_score=sim_scores,
+            syn_pos_context=all_context_pos,
+            syn_pos=all_syn_pos,
         )
     )
 
@@ -270,13 +363,16 @@ def get_replace_example(news_df: pd.DataFrame, word_syn_df: pd.DataFrame):
     tmp = news_df.sample(1, random_state=seed)
     news_df["original"] = news_df["article"]
 
+    spcy = spacy.load("en_core_web_sm")
     #
-    bart = ST(model_name="facebook/bart-large-cnn")
+    # bart = ST(model_name="facebook/bart-large-cnn")
+    baseline = ST()
     orig_highlights: pd.DataFrame = _get_sents_containing_word(
         all_text=tmp["article"].array[0],
         word_syn_df=word_syn_df,
         num_sentences=1,
-        st=bart,
+        st=baseline,
+        spcy=spcy,
     )
 
     # pd.set_option('display.max_colwidth', None)
