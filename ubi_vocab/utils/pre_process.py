@@ -58,6 +58,7 @@ class SynWords:
                         word=raw_word,
                         pos=raw_data.iloc[i]["pos"],
                         synset=wn.synsets(raw_word),
+                        word_def=raw_data.iloc[i]["definition"],
                     )
                 )
             )
@@ -88,40 +89,55 @@ class SynWords:
     def get_synonyms(self, synset_map: pd.DataFrame = None):
         if synset_map is None:
             synset_map = self.synset_map
-        # Expand the set of related synonyms by looking at lemma of synsets.
+
+        # Get the all synonyms by looking at words that are related to the definition
+        # of a specific synset. This adds the syn column.
         # synset_map : Dict[str, List[nltk.corpus.reader.wordnet.Synset]]
         additional_syn = []
-        for i, synset in enumerate(synset_map["synset"]):
-            original = synset_map.iloc[i]["word"]
-            curr_pos = synset_map.iloc[i]["pos"]
+
+        # TODO :there is probably a pandas native way to do this.
+        for tup in synset_map.itertuples():
+            original: str = tup.word
+            curr_pos: str = tup.pos
+            synset: str = tup.synset
             # Only add additional synonyms if not the original and has matching pos.
             syn_list = [
-                x.synset()
+                x.name()
                 for x in synset.lemmas()
                 if x.name != original and POS_MAP[x.synset().pos()] == curr_pos
             ]
+
             additional_syn.append(
-                pd.DataFrame(dict(word=original, pos=curr_pos, synset=syn_list))
+                pd.DataFrame(
+                    dict(
+                        word=original,
+                        pos=curr_pos,
+                        synset=synset,
+                        syn=syn_list,
+                        word_def=tup.word_def,
+                    )
+                )
             )
 
         # Append additional synonyms to the original synset map.
-        synset_map.append(pd.concat(additional_syn))
+        syn_df = pd.concat(additional_syn)
 
-        # Extract the name of the synset map.
-        synset_map["syn"] = synset_map["synset"].apply(
-            lambda x: re.sub("^([a-z]*)\\..*", "\\1", x.name())
-        )
+        # Extract the definition of the synset map.
+        syn_df["syn_def"] = syn_df["synset"].apply(lambda x: x.definition())
+
         # Extract the syn pos
-        synset_map["syn_pos"] = synset_map["synset"].apply(lambda x: POS_MAP[x.pos()])
+        syn_df["syn_pos"] = syn_df["synset"].apply(lambda x: POS_MAP[x.pos()])
 
         # Remove any duplicates
         # NOTE: we may not want to remove duplicates if we want to utilize
         # synset.
 
-        synset_map.drop_duplicates(subset=["word", "syn"], inplace=True)
-        synset_map = synset_map.query("word != syn")
-        self.synset_map_full = synset_map
-        return synset_map
+        syn_df = syn_df.query("word != syn")
+
+        syn_df.drop_duplicates(subset=["word", "syn", "pos"], inplace=True)
+
+        self.syn_df = syn_df
+        return syn_df
 
         # TODO: Need to rectify different ways of spelling the same word
         # eg. tendentious, tendencious
