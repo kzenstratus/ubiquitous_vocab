@@ -9,6 +9,7 @@ from article_class import ReplacedContext, Article
 from data_io import get_clean_news, get_raw_vocab
 from transformer import ST, calc_cos_sim, get_cos_sim
 from logger_utils import make_logger
+from constants import SPACY_POS_MAP
 
 from wsd import get_lesk
 import spacy
@@ -18,32 +19,6 @@ import en_core_web_sm
 
 # from sense2vec
 pd.set_option("display.max_colwidth", None)
-
-# from https://github.com/explosion/spaCy/blob/master/spacy/glossary.py
-
-SPACY_POS_MAP = {
-    "ADJ": "adjective",
-    "ADP": "adposition",
-    "ADV": "adverb",
-    "AUX": "auxiliary",
-    "CONJ": "conjunction",
-    "CCONJ": "coordinating conjunction",
-    "DET": "determiner",
-    "INTJ": "interjection",
-    "NOUN": "noun",
-    "PRON": "pronoun",
-    "PROPN": "proper noun",
-    "PUNCT": "punctuation",
-    "SCONJ": "subordinating conjunction",
-    "SYM": "symbol",
-    "VERB": "verb",
-    "JJ": "adjective",
-    "JJR": "adjective",
-    "JJS": "adjective",
-    "ADJA": "adjective",
-    "ADJD": "adjective",
-    "ADVP": "adverb",
-}
 
 
 def eda_replacement(news_df: pd.DataFrame, word_syn_df: pd.DataFrame):
@@ -212,7 +187,9 @@ def _get_word_in_sent_pos(
 def _get_sents_containing_word(
     all_text: str,
     word_syn_df: pd.DataFrame,
-    num_sentences: int = 1, st : ST =None, spcy=None
+    num_sentences: int = 1,
+    st: ST = None,
+    spcy=None,
 ) -> pd.DataFrame:
     """For a given news article/text, get (num_sentences) surrounding
     sentences around all synonyms listed in word_syn_df. Create a modified sentence
@@ -342,16 +319,17 @@ def _get_sents_containing_word(
     return article_df
 
 
-def get_replace_example(news_df: pd.DataFrame,
-                         word_syn_df: pd.DataFrame,
-                         seed :int = None,
-                         sample_size: int = 1,
-                         bert_model_name : str = None,
-                         spacy_model : str = "en_core_web_sm",
-                         num_sentences : int = 1,
-                         run_lesk_wsd : bool = True,
-                         run_bert_wsd : bool = True
-                         ) -> pd.DataFrame:
+def get_replace_example(
+    news_df: pd.DataFrame,
+    word_syn_df: pd.DataFrame,
+    seed: int = None,
+    sample_size: int = 1,
+    bert_model_name: str = None,
+    spacy_model: str = "en_core_web_sm",
+    num_sentences: int = 1,
+    run_lesk_wsd: bool = True,
+    run_bert_wsd: bool = True,
+) -> pd.DataFrame:
     """
 
     Args:
@@ -366,18 +344,18 @@ def get_replace_example(news_df: pd.DataFrame,
         List[dict]: [{"article" : str, "highlights_df" : pd.DataFrame}]
 
     Example:
-    >>> news_df = pd.DataFrame(dict(article = [(f"This is an example news article which" 
-                                        f"shows the damaging effects of being" 
-                                        f"unable to learn vocabulary"),
-                                        (f"Learning vocabulary by rote memorization has a passing"
-                                        f"effect on long term vocabulary understanding")
+    >>> news_df = pd.DataFrame(dict(article = [(f"This is an example news article which " 
+                                        f"shows the damaging effects of being " 
+                                        f"unable to learn vocabulary."),
+                                        (f"Learning vocabulary by rote memorization has a passing "
+                                        f"effect on long term vocabulary understanding.")
                                         ]
                             ))
     # Get the word to synonym df.
     >>> gre_syn_obj = SynWords(raw_data=gre_df)
     >>> gre_syn = gre_syn_obj.get_synonyms()
 
-    >>> ubi_vocab = get_replace_example(news_df = news_df,
+    >>> ubi_vocab : List[dict] = get_replace_example(news_df = news_df,
                             word_syn_df = gre_syn)
     """
     log = make_logger(__name__)
@@ -393,20 +371,25 @@ def get_replace_example(news_df: pd.DataFrame,
     spcy = spacy.load(spacy_model)
     st = ST(model_name=bert_model_name)
 
-    # For each news article, 
+    # For each news article,
     # Highlight sentences within an article that have replaced words.
-    rv : List[dict] = []
+    rv: List[dict] = []
     log.info(f"Getting replaced sentences for each news article.")
     for row in tmp.itertuples():
-        article : str = row.article
-        
+        article: str = row.article
+
         # Get one article's worth of replaced sentences.
         highlights: pd.DataFrame = _get_sents_containing_word(
-            all_text = article,
+            all_text=article,
             word_syn_df=word_syn_df,
             num_sentences=num_sentences,
             st=st,
             spcy=spcy,
+        )
+
+        # Add the synset to results.
+        highlights = highlights.merge(
+            word_syn_df[["word", "syn", "synset"]], on=["word", "syn"], how="left"
         )
 
         # Replacements should only occur when pos is the same.
@@ -419,42 +402,48 @@ def get_replace_example(news_df: pd.DataFrame,
             highlights["lesk"] = get_lesk(
                 context_list=highlights["mod_text"], tar_word_list=highlights["word"]
             )
-            highlights = highlights.merge(
-                word_syn_df[["word", "syn", "synset"]], on=["word", "syn"], how="left"
-            )
 
             # Only make replacements when the synset is the same as the lesk results.
             good_replace_query.append("synset == lesk")
 
-        to_replace : pd.DataFrame = highlights.copy()
+        if run_bert_wsd:
+            # Compare the word definition to the sentence containing the original sentence.
+            # Return the best synset based on cosine similarity to the target word definition.
+            get_best_bert_wsd()
+            definitions: pd.Series = highlights["synset"].apply(
+                lambda x: x.definition()
+            )
+            sim_scores = get_cos_sim(text_a=all_orig_text, text_b=all_mod_text, st=st)
+            # TODO: want to compare to the averge sentences of all sentence use cases SEMCOR.
+            # Instead let's use the rank the similarity with each synset dictionary definition.
+            # And choose the highest score.
+
+        to_replace: pd.DataFrame = highlights.copy()
         for q in good_replace_query:
             to_replace = to_replace.query(q)
-        to_replace = [["word", "syn"]]
+        to_replace = to_replace[["word", "syn"]]
 
-
-        log.info(f"Replacing the entire article {to_replace.shape)}")
+        log.info(f"Replacing the entire article {to_replace.shape}")
         # \\b is necessary to match full words.
         # too lazy to use re.sub, just use pandas for replacement.
-        new_article : str = pd.Series(article).replace({f"\\b{t.syn}\\b": t.word for t in to_replace.itertuple()},
-                                                 regex = True)
+        new_article: str = pd.Series(article).replace(
+            {f"\\b{t.syn}\\b": t.word for t in to_replace.itertuples()}, regex=True
+        )
 
-        rv.append(dict(article = article,
-                        highlights_df = highlights,
-                        new_article = new_article))
-        
+        rv.append(
+            dict(article=article, highlights_df=highlights, new_article=new_article)
+        )
+
     # pd.set_option('display.max_colwidth', None)
     # see how well scores perform here.
     # bart_rv = px.histogram(orig_highlights["sim_score"])
 
-
     return rv
 
 
+# def add_all_filters():
 
-
-
-
-def add_all_filters():
+# TODO: run bert.
 
 
 def eval_different_filters() -> pd.DataFrame:
@@ -471,7 +460,9 @@ def eval_different_filters() -> pd.DataFrame:
     master_df["pos_score"] = master_df["pos_score"].astype(int)
 
     # Get the replaced sentences to evaluate word sense disambiguation.
-    replaced_sample = get_replace_example(news_df=news_df, word_syn_df=gre_syn, seed = 28, sample_size = 1)
+    replaced_sample = get_replace_example(
+        news_df=news_df, word_syn_df=gre_syn, seed=28, sample_size=1
+    )
 
     # Add LESK results and score.
     # First Derive the LESK results.
@@ -548,10 +539,14 @@ def main():
     # small_syn_to_word = {syn : word for syn, word in syn_to_word.items() if syn in narrower_syn}
 
     # Step through get_replace_example()
-    replaced_sample_large = get_replace_example(news_df=news_df, word_syn_df=gre_syn, seed = 28, sample_size = 1)
+    replaced_sample_large = get_replace_example(
+        news_df=news_df, word_syn_df=gre_syn, seed=28, sample_size=1
+    )
     # replaced_sample_large.to_csv(os.path.join(data_dir, "master_labeled.csv"), index = False)
 
-    replaced_sample = get_replace_example(news_df=news_df, word_syn_df=small_syn, seed = 28, sample_size = 1)
+    replaced_sample = get_replace_example(
+        news_df=news_df, word_syn_df=small_syn, seed=28, sample_size=1
+    )
 
     # replaced_sample = orig_highlights
     # replaced_sample.query("syn_pos_context == syn_pos").to_csv(

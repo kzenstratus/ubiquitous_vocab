@@ -9,9 +9,7 @@ import pandera as pa
 from typing import List, Dict
 from PyDictionary import PyDictionary as pyd
 from collections import defaultdict
-
-
-POS_MAP = dict(s="adjective", n="noun", r="adverb", a="adjective", v="verb")
+from constants import POS_MAP
 
 # There are many different ways to generate synonyms.
 # Lets use
