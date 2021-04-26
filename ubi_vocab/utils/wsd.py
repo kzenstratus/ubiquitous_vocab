@@ -2,6 +2,7 @@
 from typing import List
 import nltk
 
+import numpy as np
 from nltk.wsd import lesk
 from logger_utils import make_logger
 from nltk.corpus import wordnet as wn
@@ -78,7 +79,7 @@ def get_best_synset_bert(
     >>> # Here we see that apple isn't disambiguated through bert either, however this is
     >>> # Because apple the company isn't defined in wordnet.
 
-    >>> get_best_synset_bert(context_list = ["I went to the bank to deposit my money", "I will bank my earnings"],
+    >>> best_synsets, all_def = get_best_synset_bert(context_list = ["I went to the bank to deposit my money", "I will bank my earnings"],
                     tar_word_list = ["bank", "bank"],
                     st = st,
                     pos = ["noun", "verb"]
@@ -105,6 +106,12 @@ def get_best_synset_bert(
         tmp_def["definition"] = tmp_def["synsets"].apply(
             lambda x: x.definition() if POS_MAP[x.pos()] == tar_pos else None
         )
+        # Get word examples.
+        tmp_def["example"] = tmp_def["synsets"].apply(
+            lambda x: x.examples()[0]
+            if POS_MAP[x.pos()] == tar_pos and len(x.examples()) > 0
+            else None
+        )
         tmp_def = tmp_def.query("definition.notnull()")
         # Create an index to do a groupby on. This is because get_cos_sim is best run once vectorized.
         tmp_def["idx"] = i
@@ -112,9 +119,20 @@ def get_best_synset_bert(
         all_def = all_def.append(tmp_def)
 
     # Compare the word in context with all definitions of that word in wordnet.
-    all_def["score"] = get_cos_sim(
+    all_def["def_score"] = get_cos_sim(
         text_a=all_def["definition"], text_b=all_def["context"]
     )
+
+    # Do a comparison with example sentences.
+    is_example = all_def["example"].notnull()
+    all_def.loc[is_example, "example_score"] = get_cos_sim(
+        text_a=list(all_def[is_example]["example"]),
+        text_b=list(all_def[is_example]["context"]),
+        st=st,
+    )
+
+    # If example score isn't available, fill na with the definition score.
+    all_def["score"] = all_def[["def_score", "example_score"]].mean(axis=1)
 
     best_synsets = list(
         all_def.sort_values("score", ascending=False)
@@ -123,4 +141,4 @@ def get_best_synset_bert(
         .reset_index(drop=True)["synsets"]
     )
 
-    return new_synsets
+    return new_synsets, all_def
