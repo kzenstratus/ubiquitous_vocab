@@ -7,7 +7,6 @@ from nltk.corpus import wordnet as wn
 import pandas as pd
 import pandera as pa
 from typing import List, Dict
-from PyDictionary import PyDictionary as pyd
 from collections import defaultdict
 from constants import POS_MAP
 
