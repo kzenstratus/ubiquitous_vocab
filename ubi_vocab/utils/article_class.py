@@ -1,5 +1,5 @@
 from typing import List, Optional, Any
-
+from pydantic import BaseModel
 from transformer import ST, calc_cos_sim
 
 
@@ -24,6 +24,7 @@ class ReplacedContext(BaseModel):
     #     if isinstance(v, list):
     #         v = ". ".join(v)
     #     return v
+
 
 class Article(BaseModel):
     original: str

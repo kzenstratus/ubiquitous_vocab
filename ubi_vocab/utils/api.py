@@ -1,4 +1,5 @@
 # This script contains the user facing interface to take a body of text, and get the replaced results.
+import os
 import pandas as pd
 import plotly.express as px
 from typing import List, Set, Dict, Tuple
