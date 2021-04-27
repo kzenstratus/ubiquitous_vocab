@@ -1,4 +1,4 @@
-import re
+import re, os
 import pandas as pd
 import plotly.express as px
 from typing import List, Set, Dict, Tuple
@@ -167,12 +167,12 @@ def _get_word_in_sent_pos(
         str: [description]
     Examples:
     >>> context = "I played in a soccer game"
-    >>> spcy = spacy.load("en_core_web_sm")
+    >>> spcy = en_core_web_sm.load()
     >>> _get_word_in_sent_pos(context, tar_word = "game", spcy = spcy)    
 
     """
     if spcy is None:
-        spcy = spacy.load("en_core_web_sm")
+        spcy = en_core_web_sm.load()
 
     for token in spcy(context):
         if token.text.lower() == tar_word.lower():
@@ -326,7 +326,7 @@ def get_replace_example(
     seed: int = None,
     sample_size: int = 1,
     bert_model_name: str = None,
-    spacy_model: str = "en_core_web_sm",
+    spacy_model=en_core_web_sm,
     num_sentences: int = 1,
     run_lesk_wsd: bool = True,
     run_bert_wsd: bool = True,
@@ -369,7 +369,11 @@ def get_replace_example(
 
     # Load Spacy and BERT models.
     log.info(f"Loading in spacy and sentence transformer models.")
-    spcy = spacy.load(spacy_model)
+
+    # For some reason finding the model by string doesn't work well on binder.
+
+    spcy = spacy_model.load()
+
     st = ST(model_name=bert_model_name)
 
     # For each news article,
@@ -448,15 +452,20 @@ def get_replace_example(
     return rv
 
 
-# TODO: run bert.
+def eval_different_filters(data_dir: str) -> pd.DataFrame:
+    """[summary]
 
+    Args:
+        data_dir (str): "../../data/"
 
-def eval_different_filters() -> pd.DataFrame:
-    data_dir = "~/repos/ubiquitous_vocab/data/"
+    Returns:
+        pd.DataFrame: [description]
+    """
     master_file = os.path.join(data_dir, "master_labeled.csv")
     master_df = pd.read_csv(master_file)
 
     # Get the Synonym object for WSD.
+    gre_df = get_raw_vocab(out_file=os.path.join(data_dir, "gre_vocab.csv"))
     gre_syn_obj = SynWords(raw_data=gre_df)
     gre_syn = gre_syn_obj.get_synonyms()
 
