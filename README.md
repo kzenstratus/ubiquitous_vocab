@@ -1,6 +1,10 @@
 # ubiquitous_vocab
 GTech Ed Tech Project 
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/kzenstratus/ubiquitous_vocab/main?filepath=ubi_vocab%2Futils)
+
+
+
 # For Developers:
 
 Create and install dependencies into a conda environment
