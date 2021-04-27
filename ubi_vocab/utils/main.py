@@ -10,8 +10,9 @@ from data_io import get_clean_news, get_raw_vocab
 from transformer import ST, calc_cos_sim, get_cos_sim
 from logger_utils import make_logger
 from constants import SPACY_POS_MAP
+from metrics import Metrics
 
-from wsd import get_lesk
+from wsd import get_lesk, get_best_synset_bert
 import spacy
 
 # python -m spacy download en_core_web_sm
@@ -408,12 +409,18 @@ def get_replace_example(
 
         if run_bert_wsd:
             # Compare the word definition to the sentence containing the original sentence.
-            # Return the best synset based on cosine similarity to the target word definition.
-            get_best_bert_wsd()
-            definitions: pd.Series = highlights["synset"].apply(
-                lambda x: x.definition()
+            # Return the best synset based on cosine similarity to the target word definition
+            # and example sentences.
+
+            best_synsets, _ = get_best_synset_bert(
+                context_list=highlights["mod_text"],
+                tar_word_list=highlights["word"],
+                st=st,
+                pos=highlights["syn_pos"],
             )
-            sim_scores = get_cos_sim(text_a=all_orig_text, text_b=all_mod_text, st=st)
+            highlights["bert_wsd"] = best_synsets
+            # The best results don't use synset and bert_wsd.
+            good_replace_query.append("synset == bert_wsd")
             # TODO: want to compare to the averge sentences of all sentence use cases SEMCOR.
             # Instead let's use the rank the similarity with each synset dictionary definition.
             # And choose the highest score.
@@ -441,8 +448,6 @@ def get_replace_example(
     return rv
 
 
-# def add_all_filters():
-
 # TODO: run bert.
 
 
@@ -455,27 +460,80 @@ def eval_different_filters() -> pd.DataFrame:
     gre_syn_obj = SynWords(raw_data=gre_df)
     gre_syn = gre_syn_obj.get_synonyms()
 
+    # Add in original synset
+    master_df = master_df.merge(
+        gre_syn[["word", "syn", "synset"]], on=["word", "syn"], how="left"
+    )
+
     # Add pos matching.
     master_df["pos_score"] = master_df["syn_pos"] == master_df["syn_pos_context"]
     master_df["pos_score"] = master_df["pos_score"].astype(int)
 
     # Get the replaced sentences to evaluate word sense disambiguation.
-    replaced_sample = get_replace_example(
-        news_df=news_df, word_syn_df=gre_syn, seed=28, sample_size=1
-    )
 
-    # Add LESK results and score.
-    # First Derive the LESK results.
-    master_df["lesk"] = get_lesk(
-        context_list=master_df["mod_text"], tar_word_list=master_df["word"]
-    )
-
-    master_df = master_df.merge(
-        gre_syn[["word", "syn", "synset"]], on=["word", "syn"], how="left"
-    )
     # Get recommendation based on lesk results.
-    master_df["lesk_score"] = master_df["lesk"] == master_df["synset"]
+    master_df["lesk_score"] = master_df["lesk"] == master_df["synset"].astype(str)
     master_df["lesk_score"] = master_df["lesk_score"].astype(int)
+
+    # Get recommendation based on BERT WSD.
+    master_df["bert_wsd_score"] = master_df["bert_wsd"] == master_df["synset"].astype(
+        str
+    )
+    master_df["bert_wsd_score"] = master_df["bert_wsd_score"].astype(int)
+
+    # Create an aggregate score for POS + LESK
+    master_df["pos_lesk_score"] = 0
+    master_df.loc[
+        (master_df["lesk_score"] == master_df["pos_score"])
+        & (master_df["lesk_score"] == 1),
+        "pos_lesk_score",
+    ] = 1
+    # POS + BERT WSD
+    master_df["pos_bert_score"] = 0
+    master_df.loc[
+        (master_df["bert_wsd_score"] == master_df["pos_score"])
+        & (master_df["bert_wsd_score"] == 1),
+        "pos_bert_score",
+    ] = 1
+
+    # POS + BERT WSD + LESK
+    master_df["pos_bert_lesk_score"] = 0
+    master_df.loc[
+        (master_df["pos_lesk_score"] == 1) & (master_df["pos_bert_score"] == 1),
+        "pos_bert_lesk_score",
+    ] = 1
+
+    master_df["base"] = 1
+    # Get the TP/FP/Precision/F1 of each.
+    metrics = Metrics(labels=master_df["label"])
+    metrics_df = pd.DataFrame()
+
+    for model in [
+        "base",
+        "pos_score",
+        "lesk_score",
+        "bert_wsd_score",
+        "pos_lesk_score",
+        "pos_bert_score",
+        "pos_bert_lesk_score",
+    ]:
+        metrics.get_pr_f1(scores=master_df[model])
+        metrics_df = metrics_df.append(
+            pd.DataFrame(
+                dict(
+                    model=[model],
+                    precision=[metrics.precision],
+                    recall=[metrics.recall],
+                    f1=[metrics.f1],
+                    tp=[metrics.tp],
+                    fp=[metrics.fp],
+                    fn=[metrics.fn],
+                    tn=[metrics.tn],
+                )
+            )
+        )
+
+    return master_df, metrics_df
 
 
 def main():
@@ -541,7 +599,12 @@ def main():
     # Step through get_replace_example()
     replaced_sample_large = get_replace_example(
         news_df=news_df, word_syn_df=gre_syn, seed=28, sample_size=1
-    )
+    )[0]["highlights_df"]
+
+    # labeled_df = pd.read_csv(os.path.join(data_dir, "master_labeled.csv"))
+    # labeled_df = labeled_df.merge(replaced_sample_large[["word", "syn", "orig_text", "lesk", "bert_wsd"]],
+    #                 on = ["word", "syn", "orig_text"],
+    #                 how = "left")
     # replaced_sample_large.to_csv(os.path.join(data_dir, "master_labeled.csv"), index = False)
 
     replaced_sample = get_replace_example(

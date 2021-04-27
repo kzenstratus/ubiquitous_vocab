@@ -2,11 +2,12 @@
 from typing import List
 import nltk
 
+import pandas as pd
 import numpy as np
 from nltk.wsd import lesk
 from logger_utils import make_logger
 from nltk.corpus import wordnet as wn
-from transformer import ST
+from transformer import ST, get_cos_sim
 from constants import POS_MAP
 
 
@@ -120,7 +121,7 @@ def get_best_synset_bert(
 
     # Compare the word in context with all definitions of that word in wordnet.
     all_def["def_score"] = get_cos_sim(
-        text_a=all_def["definition"], text_b=all_def["context"]
+        text_a=list(all_def["definition"]), text_b=list(all_def["context"])
     )
 
     # Do a comparison with example sentences.
@@ -141,4 +142,4 @@ def get_best_synset_bert(
         .reset_index(drop=True)["synsets"]
     )
 
-    return new_synsets, all_def
+    return best_synsets, all_def
