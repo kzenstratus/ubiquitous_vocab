@@ -12,16 +12,12 @@ dependencies:
   - pandera=0.6.2
   - plotly=4.14.3
   - pip=21.0
-  - pydantic=1.8.1
   - python=3.7
   - pytorch=1.6.0
   - sentence-transformers=0.4.1
-  - spacy=3.0.5
-  - sense2vec=1.0.0a1
+  - spacy=2.3.5
   - scipy=1.6.1
   - scikit-learn=0.24.1
   - transformers=4.4.2
   - torchvision=0.7.0
   - black=20.8
-  - pip:
-    - PyDictionary
