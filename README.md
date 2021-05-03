@@ -23,7 +23,7 @@ I will work on the technology that will take a large input text (news article le
 
 
 # Example:
-* Click on the above binder badge for an interactive notebook.
+* Click on the above binder badge for an interactive notebook. Navigate to utils -> demo.ipynb. 
 
 # Current Technology:
 * spacy for POS matching.
