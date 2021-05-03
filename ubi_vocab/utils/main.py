@@ -417,8 +417,8 @@ def get_replace_example(
             # and example sentences.
 
             best_synsets, _ = get_best_synset_bert(
-                context_list=highlights["mod_text"],
-                tar_word_list=highlights["word"],
+                context_list=highlights["orig_text"],
+                tar_word_list=highlights["syn"],
                 st=st,
                 pos=highlights["syn_pos"],
             )
@@ -564,6 +564,24 @@ def main():
     gre_syn_obj = SynWords(raw_data=gre_df)
     gre_syn = gre_syn_obj.get_synonyms()
 
+    # Step through get_replace_example()
+    replaced_sample_large = get_replace_example(
+        news_df=news_df, word_syn_df=gre_syn, seed=28, sample_size=1
+    )[0]["highlights_df"]
+
+    # Update the labeled dataset with new WSD results if need be.
+    # labeled_df = pd.read_csv(os.path.join(data_dir, "master_labeled.csv"))
+    # labeled_df.drop(columns = ["bert_wsd", "lesk"], inplace = True)
+    # labeled_df = labeled_df.merge(replaced_sample_large[["word", "syn", "orig_text", "lesk", "bert_wsd"]],
+    #                 on = ["word", "syn", "orig_text"],
+    #                 how = "left")
+    # labeled_df.to_csv(os.path.join(data_dir, "master_labeled.csv"), index = False)
+    metrics_df = eval_different_filters(data_dir=data_dir)
+    metrics_df[1].sort_values("f1", ascending=False)
+
+    # ---------------
+    # EDA
+    # ---------------------
     # Run eda module.
     # Look at 1000 news articles.
     # matched_df,\
@@ -586,63 +604,11 @@ def main():
     # Re-run the above with a narrower defined synset
     narrower_syn = set(pop_syn.query("matches < 300").syn.unique())
 
-    matched_narr_df, merged_narr_df, small_narr_df, freq_narr_plot = eda_replacement(
-        news_df=news_df, word_syn_df=gre_syn
-    )
-
-    px.histogram(
-        small_narr_df.num_vocab,
-        title="Number of Vocab words contained within an article",
-    )
-
-    small_narr_df.num_vocab.describe()
-
-    # Perform the actual replacements. How are the replacements
-    # doing? Do a sample and evaluate.
-
-    #
-    small_syn = gre_syn.query("syn.isin(@narrower_syn)")
-    word_syn_df = small_syn
-    # small_syn_to_word = {syn : word for syn, word in syn_to_word.items() if syn in narrower_syn}
-
-    # Step through get_replace_example()
-    replaced_sample_large = get_replace_example(
-        news_df=news_df, word_syn_df=gre_syn, seed=28, sample_size=1
-    )[0]["highlights_df"]
-
-    # labeled_df = pd.read_csv(os.path.join(data_dir, "master_labeled.csv"))
-    # labeled_df = labeled_df.merge(replaced_sample_large[["word", "syn", "orig_text", "lesk", "bert_wsd"]],
-    #                 on = ["word", "syn", "orig_text"],
-    #                 how = "left")
-    # replaced_sample_large.to_csv(os.path.join(data_dir, "master_labeled.csv"), index = False)
-
-    replaced_sample = get_replace_example(
-        news_df=news_df, word_syn_df=small_syn, seed=28, sample_size=1
-    )
-
-    # replaced_sample = orig_highlights
-    # replaced_sample.query("syn_pos_context == syn_pos").to_csv(
-    #     os.path.join(data_dir, "labeled_pos_matched_2.csv"), index=False
+    # matched_narr_df, merged_narr_df, small_narr_df, freq_narr_plot = eda_replacement(
+    #     news_df=news_df, word_syn_df=gre_syn
     # )
 
-    # Evaluate LESK
-    # Reduce sampled df based on matching pos.
-    lesk_df = replaced_sample_large.query("syn_pos_context == syn_pos").reset_index(
-        drop=False
-    )
-    lesk_df["lesk"] = get_lesk(
-        context_list=lesk_df["mod_text"], tar_word_list=lesk_df["word"]
-    )
-    lesk_df = lesk_df.merge(
-        gre_syn[["word", "syn", "synset"]], on=["word", "syn"], how="left"
-    )
-
-    lesk_df = lesk_df.query("synset == lesk").reset_index(drop=True)
-    lesk_df.to_csv(os.path.join(data_dir, "labeled_lesk.csv"), index=False)
-    # 4 TP , 8 FP, 33% precision
-
-    # Let's do cosine similarity of the modified text and the original definition.
-
-    # reduced to 12 from 23.
-
-    # Get the synset of the word/syn
+    # px.histogram(
+    #     small_narr_df.num_vocab,
+    #     title="Number of Vocab words contained within an article",
+    # )

@@ -58,7 +58,7 @@ def get_best_synset_bert(
     context_list: List[str], tar_word_list: List[str], st: ST, pos: List[str]
 ) -> List[nltk.corpus.reader.wordnet.Synset]:
     """Given a list of sentences, and a list of target words,
-     use lesk to get the synset most closely aligned with the word in that context.
+     use bert to get the synset most closely aligned with the word in that context.
 
     Args:
         context_list (List[str]): [description]
